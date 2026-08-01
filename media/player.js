@@ -119,6 +119,33 @@ function buildTimelineMarkers(eventCount, jumps, trims) {
   return markers.sort((left, right) => left.index - right.index || left.kind.localeCompare(right.kind));
 }
 
+function markerIconSvg(kind) {
+  if (kind === "trim") {
+    return `
+      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <circle cx="5" cy="15" r="2.3" fill="none" stroke="currentColor" stroke-width="2"></circle>
+        <circle cx="15" cy="15" r="2.3" fill="none" stroke="currentColor" stroke-width="2"></circle>
+        <path d="M6.6 13.2 17 3.8M13.4 13.2 3 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+        <path d="M9.9 10.2 10.1 10.2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+      </svg>`;
+  }
+
+  return `
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M3 13c3.2-7.5 11.2-7.5 14 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+      <path d="M6 13h8.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 3"></path>
+      <circle cx="3" cy="13" r="1.7" fill="currentColor"></circle>
+      <circle cx="17" cy="13" r="1.7" fill="currentColor"></circle>
+    </svg>`;
+}
+
+function createMarkerIcon(kind) {
+  const icon = document.createElement("span");
+  icon.className = `timeline-marker-icon ${kind}`;
+  icon.innerHTML = markerIconSvg(kind);
+  return icon;
+}
+
 function renderTimelineMarkers() {
   const artifact = state.artifact;
   if (!artifact) {
@@ -137,7 +164,16 @@ function renderTimelineMarkers() {
       const node = document.createElement("span");
       node.className = `timeline-marker ${marker.kind}`;
       node.style.left = `${marker.position}%`;
-      node.title = `${marker.kind} at ${marker.index}`;
+      const labelPrefix = marker.kind === "trim" ? "Trim at stitch" : "Jump at stitch";
+      const label = `${labelPrefix} ${marker.index + 1}`;
+      node.title = label;
+      node.setAttribute("aria-label", label);
+      node.setAttribute("role", "img");
+
+      const line = document.createElement("span");
+      line.className = "timeline-marker-line";
+      line.setAttribute("aria-hidden", "true");
+      node.append(line, createMarkerIcon(marker.kind));
       return node;
     })
   );

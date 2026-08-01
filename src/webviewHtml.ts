@@ -45,11 +45,35 @@ export function getWebviewHtml(context: vscode.ExtensionContext, webview: vscode
         <input id="showTrims" type="checkbox" checked disabled>
         Trims
       </label>
+      <div id="timelineLegend" class="timeline-legend" aria-label="Timeline marker legend">
+        <span class="legend-item">
+          <span class="legend-icon jump" aria-hidden="true">
+            <svg viewBox="0 0 20 20" focusable="false">
+              <path d="M3 13c3.2-7.5 11.2-7.5 14 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+              <path d="M6 13h8.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 3"></path>
+              <circle cx="3" cy="13" r="1.7" fill="currentColor"></circle>
+              <circle cx="17" cy="13" r="1.7" fill="currentColor"></circle>
+            </svg>
+          </span>
+          Jump
+        </span>
+        <span class="legend-item">
+          <span class="legend-icon trim" aria-hidden="true">
+            <svg viewBox="0 0 20 20" focusable="false">
+              <circle cx="5" cy="15" r="2.3" fill="none" stroke="currentColor" stroke-width="2"></circle>
+              <circle cx="15" cy="15" r="2.3" fill="none" stroke="currentColor" stroke-width="2"></circle>
+              <path d="M6.6 13.2 17 3.8M13.4 13.2 3 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+              <path d="M9.9 10.2 10.1 10.2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+            </svg>
+          </span>
+          Trim
+        </span>
+      </div>
     </section>
 
     <section class="timeline-wrap" aria-label="Timeline">
       <input id="timeline" type="range" min="0" max="0" value="0" disabled>
-      <div id="timelineMarkers" class="timeline-markers" aria-hidden="true"></div>
+      <div id="timelineMarkers" class="timeline-markers"></div>
       <output id="positionValue" for="timeline">0 / 0</output>
     </section>
   </main>
