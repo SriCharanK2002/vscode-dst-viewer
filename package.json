@@ -5,6 +5,14 @@
   "version": "0.1.0",
   "publisher": "mydigitizer",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SriCharanK2002/vscode-dst-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SriCharanK2002/vscode-dst-viewer/issues"
+  },
+  "homepage": "https://github.com/SriCharanK2002/vscode-dst-viewer#readme",
   "engines": {
     "vscode": "^1.90.0"
   },
