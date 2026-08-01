@@ -1,0 +1,59 @@
+import * as vscode from "vscode";
+
+export function getWebviewHtml(context: vscode.ExtensionContext, webview: vscode.Webview): string {
+  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "media", "player.css"));
+  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "media", "player.js"));
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource}; script-src ${webview.cspSource};"
+  >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="${styleUri}">
+  <title>DST Player</title>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="title-group">
+        <h1 id="fileName">DST Player</h1>
+        <p id="summaryText">Open a DST file to inspect playback.</p>
+      </div>
+      <div class="stats" id="stats" aria-live="polite"></div>
+    </header>
+
+    <section class="stage" aria-label="DST stitch preview">
+      <canvas id="canvas"></canvas>
+      <div id="emptyState" class="empty-state">Loading DST preview...</div>
+    </section>
+
+    <section class="controls" aria-label="Playback controls">
+      <button id="playButton" type="button" disabled>Play</button>
+      <button id="speedDownButton" type="button" disabled>Slower</button>
+      <output id="speedValue" for="timeline">30x</output>
+      <button id="speedUpButton" type="button" disabled>Faster</button>
+      <button id="resetViewButton" type="button" disabled>Reset View</button>
+      <label class="toggle">
+        <input id="showJumps" type="checkbox" checked disabled>
+        Jumps
+      </label>
+      <label class="toggle">
+        <input id="showTrims" type="checkbox" checked disabled>
+        Trims
+      </label>
+    </section>
+
+    <section class="timeline-wrap" aria-label="Timeline">
+      <input id="timeline" type="range" min="0" max="0" value="0" disabled>
+      <div id="timelineMarkers" class="timeline-markers" aria-hidden="true"></div>
+      <output id="positionValue" for="timeline">0 / 0</output>
+    </section>
+  </main>
+  <script src="${scriptUri}"></script>
+</body>
+</html>`;
+}
