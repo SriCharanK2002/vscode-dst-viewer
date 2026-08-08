@@ -14,3 +14,9 @@ test("package contributes a default custom readonly DST editor", () => {
   assert.deepEqual(editor.selector, [{ filenamePattern: "*.dst" }, { filenamePattern: "*.DST" }]);
   assert.ok(pkg.activationEvents.includes("onCustomEditor:mydigitizerDstPlayer.viewer"));
 });
+
+test("package supports untrusted workspaces for read-only DST viewing", () => {
+  const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
+
+  assert.equal(pkg.capabilities.untrustedWorkspaces.supported, true);
+});
