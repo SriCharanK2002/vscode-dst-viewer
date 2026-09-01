@@ -2,7 +2,7 @@
   "name": "dst-player",
   "displayName": "DST Player",
   "description": "Open Tajima DST embroidery files directly in VS Code with stitch playback, timeline scrubbing, and jump/trim highlighting.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "mydigitizer",
   "license": "MIT",
   "repository": {

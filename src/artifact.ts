@@ -12,7 +12,7 @@ export type DstCommandKind = keyof typeof COMMAND_CODES;
 export type DstCommandCode = (typeof COMMAND_CODES)[DstCommandKind];
 
 export interface DstViewerArtifact {
-  version: 1;
+  version: 2;
   format: "dst_viewer_artifact";
   units: "dst_0.1mm";
   bounds: {
@@ -30,6 +30,9 @@ export interface DstViewerArtifact {
     color_change_count: number;
     end_count: number;
     thread_block_count: number;
+    raw_record_count: number;
+    raw_jump_record_count: number;
+    decoded_trim_record_count: number;
   };
   thread_blocks: Array<{
     block_index: number;
@@ -42,7 +45,12 @@ export interface DstViewerArtifact {
   events: {
     x: number[];
     y: number[];
+    from_x: number[];
+    from_y: number[];
     cmd: DstCommandCode[];
+    source_record_index: number[];
+    source_record_count: number[];
+    decoded_from: Array<string | null>;
   };
   indices: {
     commands: number[];

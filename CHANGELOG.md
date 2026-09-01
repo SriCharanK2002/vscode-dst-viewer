@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Fix DST command decoding, trim detection, and coordinate orientation.
+- Prevent false sewn connectors after thread breaks.
+- Add command stepping, keyboard navigation, pointer-centered zoom, and color-change markers.
+
 ## 0.1.2
 
 - Declared support for untrusted workspaces so DST files can open from folders such as Downloads.

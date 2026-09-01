@@ -2,6 +2,7 @@
   --jump-color: #64748b;
   --trim-color: #f97316;
   --stop-color: #ef4444;
+  --color-change-color: #a855f7;
   --played-color: #2563eb;
   --inactive-color: color-mix(in srgb, var(--vscode-editor-foreground) 28%, transparent);
 }
@@ -109,6 +110,7 @@ canvas {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
@@ -244,6 +246,10 @@ input:disabled {
   background: var(--trim-color);
 }
 
+.timeline-marker.color_change .timeline-marker-line {
+  background: var(--color-change-color);
+}
+
 .timeline-marker-icon {
   position: absolute;
   top: 19px;
@@ -259,4 +265,8 @@ input:disabled {
 
 .timeline-marker-icon.trim {
   color: var(--trim-color);
+}
+
+.timeline-marker-icon.color_change {
+  color: var(--color-change-color);
 }

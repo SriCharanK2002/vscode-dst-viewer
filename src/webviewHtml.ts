@@ -32,13 +32,17 @@ export function getWebviewHtml(context: vscode.ExtensionContext, webview: vscode
     </section>
 
     <section class="controls" aria-label="Playback controls">
+      <button id="previousCommandButton" type="button" disabled>Previous Command</button>
+      <button id="previousStitchButton" type="button" disabled>Previous</button>
       <button id="playButton" type="button" disabled>Play</button>
+      <button id="nextStitchButton" type="button" disabled>Next</button>
+      <button id="nextCommandButton" type="button" disabled>Next Command</button>
       <button id="speedDownButton" type="button" disabled>Slower</button>
       <output id="speedValue" for="timeline">30x</output>
       <button id="speedUpButton" type="button" disabled>Faster</button>
       <button id="resetViewButton" type="button" disabled>Reset View</button>
       <label class="toggle">
-        <input id="showJumps" type="checkbox" checked disabled>
+        <input id="showJumps" type="checkbox" disabled>
         Jumps
       </label>
       <label class="toggle">

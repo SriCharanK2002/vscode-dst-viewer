@@ -3,6 +3,7 @@ const vscode = acquireVsCodeApi();
 const state = {
   artifact: null,
   events: [],
+  renderPlan: { sewn: [], jumps: [], markers: [] },
   currentIndex: 0,
   isPlaying: false,
   timer: null,
@@ -21,6 +22,10 @@ const els = {
   stage: document.querySelector(".stage"),
   emptyState: document.getElementById("emptyState"),
   playButton: document.getElementById("playButton"),
+  previousCommandButton: document.getElementById("previousCommandButton"),
+  previousStitchButton: document.getElementById("previousStitchButton"),
+  nextStitchButton: document.getElementById("nextStitchButton"),
+  nextCommandButton: document.getElementById("nextCommandButton"),
   speedDownButton: document.getElementById("speedDownButton"),
   speedUpButton: document.getElementById("speedUpButton"),
   speedValue: document.getElementById("speedValue"),
@@ -50,6 +55,9 @@ function normalizeEvents(artifact) {
   const ys = artifact?.events?.y || [];
   const cmds = artifact?.events?.cmd || [];
   const blocks = artifact?.thread_blocks || [];
+  const fromXs = artifact?.events?.from_x || [];
+  const fromYs = artifact?.events?.from_y || [];
+  const threadBreaks = new Set(artifact?.indices?.thread_breaks || []);
   const count = Math.min(xs.length, ys.length, cmds.length);
 
   return Array.from({ length: count }, (_, index) => {
@@ -57,16 +65,51 @@ function normalizeEvents(artifact) {
     return {
       x: xs[index],
       y: ys[index],
+      fromX: fromXs[index] ?? (index > 0 ? xs[index - 1] : 0),
+      fromY: fromYs[index] ?? (index > 0 ? ys[index - 1] : 0),
       cmd: cmds[index],
       kind: commandName(cmds[index]),
-      block: block?.block_index || 0
+      block: block?.block_index || 0,
+      threadBreakBefore: threadBreaks.has(index)
     };
   });
+}
+
+function buildRenderPlan(events) {
+  const plan = { sewn: [], jumps: [], markers: [] };
+  events.forEach((event, eventIndex) => {
+    if (event.kind === "stitch") {
+      if (event.threadBreakBefore) return;
+      if (event.fromX === event.x && event.fromY === event.y) return;
+      plan.sewn.push({
+        from: { x: event.fromX, y: event.fromY },
+        to: event,
+        eventIndex,
+        block: event.block
+      });
+      return;
+    }
+    if (event.kind === "jump") {
+      plan.jumps.push({
+        from: { x: event.fromX, y: event.fromY },
+        to: event,
+        eventIndex
+      });
+    }
+    if (["trim", "stop", "color_change"].includes(event.kind)) {
+      plan.markers.push({ event, eventIndex });
+    }
+  });
+  return plan;
 }
 
 function setControlsEnabled(enabled) {
   for (const element of [
     els.playButton,
+    els.previousCommandButton,
+    els.previousStitchButton,
+    els.nextStitchButton,
+    els.nextCommandButton,
     els.speedDownButton,
     els.speedUpButton,
     els.resetViewButton,
@@ -82,6 +125,7 @@ function setError(fileName, message) {
   stopPlayback();
   state.artifact = null;
   state.events = [];
+  state.renderPlan = { sewn: [], jumps: [], markers: [] };
   els.fileName.textContent = fileName || "DST Player";
   els.summaryText.textContent = message;
   els.stats.textContent = "";
@@ -110,11 +154,12 @@ function renderStats(summary) {
   );
 }
 
-function buildTimelineMarkers(eventCount, jumps, trims) {
+function buildTimelineMarkers(eventCount, jumps, trims, colorChanges) {
   const denominator = Math.max(1, eventCount - 1);
   const markers = [
     ...jumps.map((index) => ({ kind: "jump", index, position: (index / denominator) * 100 })),
-    ...trims.map((index) => ({ kind: "trim", index, position: (index / denominator) * 100 }))
+    ...trims.map((index) => ({ kind: "trim", index, position: (index / denominator) * 100 })),
+    ...colorChanges.map((index) => ({ kind: "color_change", index, position: (index / denominator) * 100 }))
   ];
   return markers.sort((left, right) => left.index - right.index || left.kind.localeCompare(right.kind));
 }
@@ -127,6 +172,14 @@ function markerIconSvg(kind) {
         <circle cx="15" cy="15" r="2.3" fill="none" stroke="currentColor" stroke-width="2"></circle>
         <path d="M6.6 13.2 17 3.8M13.4 13.2 3 3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
         <path d="M9.9 10.2 10.1 10.2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"></path>
+      </svg>`;
+  }
+
+  if (kind === "color_change") {
+    return `
+      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <circle cx="6" cy="10" r="4" fill="currentColor"></circle>
+        <path d="M11 6h6v8h-6" fill="none" stroke="currentColor" stroke-width="2"></path>
       </svg>`;
   }
 
@@ -156,7 +209,8 @@ function renderTimelineMarkers() {
   const markers = buildTimelineMarkers(
     state.events.length,
     artifact.indices?.jumps || [],
-    artifact.indices?.trims || []
+    artifact.indices?.trims || [],
+    artifact.indices?.color_changes || []
   );
 
   els.timelineMarkers.replaceChildren(
@@ -164,7 +218,11 @@ function renderTimelineMarkers() {
       const node = document.createElement("span");
       node.className = `timeline-marker ${marker.kind}`;
       node.style.left = `${marker.position}%`;
-      const labelPrefix = marker.kind === "trim" ? "Trim at stitch" : "Jump at stitch";
+      const labelPrefix = marker.kind === "trim"
+        ? "Trim at event"
+        : marker.kind === "color_change"
+          ? "Color change at event"
+          : "Jump at event";
       const label = `${labelPrefix} ${marker.index + 1}`;
       node.title = label;
       node.setAttribute("aria-label", label);
@@ -183,6 +241,7 @@ function loadArtifact(fileName, artifact) {
   stopPlayback();
   state.artifact = artifact;
   state.events = normalizeEvents(artifact);
+  state.renderPlan = buildRenderPlan(state.events);
   state.currentIndex = 0;
   state.zoom = 1;
   state.panX = 0;
@@ -228,7 +287,7 @@ function canvasTransform(bounds) {
 function toCanvasPoint(event, bounds, transform) {
   return {
     x: transform.offsetX + (event.x - bounds.min_x) * transform.scale,
-    y: transform.offsetY + (bounds.max_y - event.y) * transform.scale
+    y: transform.offsetY + (event.y - bounds.min_y) * transform.scale
   };
 }
 
@@ -289,10 +348,10 @@ function draw() {
   const maxIndex = Math.max(0, state.events.length - 1);
   const currentIndex = Math.max(0, Math.min(state.currentIndex, maxIndex));
 
-  for (let index = 1; index < state.events.length; index += 1) {
+  for (const segment of state.renderPlan.sewn) {
     drawSegment(
-      state.events[index - 1],
-      state.events[index],
+      segment.from,
+      segment.to,
       bounds,
       transform,
       getCssColor("--inactive-color"),
@@ -300,23 +359,26 @@ function draw() {
     );
   }
 
-  for (let index = 1; index <= currentIndex; index += 1) {
-    const prev = state.events[index - 1];
-    const curr = state.events[index];
-    const isJump = curr.kind === "jump";
-    const isTrim = curr.kind === "trim";
+  for (const segment of state.renderPlan.sewn) {
+    if (segment.eventIndex > currentIndex) continue;
+    drawSegment(segment.from, segment.to, bounds, transform, paletteColor(segment.block), 1);
+  }
 
-    if (isJump && !els.showJumps.checked) continue;
-    drawSegment(prev, curr, bounds, transform, paletteColor(curr.block), 1, isJump);
+  if (els.showJumps.checked) {
+    for (const segment of state.renderPlan.jumps) {
+      if (segment.eventIndex > currentIndex) continue;
+      drawSegment(segment.from, segment.to, bounds, transform, getCssColor("--jump-color"), 1, true);
+    }
+  }
 
-    if (isJump && els.showJumps.checked) {
-      drawSegment(prev, curr, bounds, transform, getCssColor("--jump-color"), 1, true);
-    }
-    if (isTrim && els.showTrims.checked) {
-      drawMarker(curr, bounds, transform, getCssColor("--trim-color"), "x");
-    }
-    if (curr.kind === "stop") {
-      drawMarker(curr, bounds, transform, getCssColor("--stop-color"), "square");
+  for (const marker of state.renderPlan.markers) {
+    if (marker.eventIndex > currentIndex) continue;
+    if (marker.event.kind === "trim" && els.showTrims.checked) {
+      drawMarker(marker.event, bounds, transform, getCssColor("--trim-color"), "x");
+    } else if (marker.event.kind === "stop") {
+      drawMarker(marker.event, bounds, transform, getCssColor("--stop-color"), "square");
+    } else if (marker.event.kind === "color_change") {
+      drawMarker(marker.event, bounds, transform, getCssColor("--color-change-color"), "square");
     }
   }
 
@@ -344,6 +406,15 @@ function setCurrentIndex(index) {
   state.currentIndex = Math.max(0, Math.min(Math.trunc(index), maxIndex));
   updatePosition();
   draw();
+}
+
+function stepCommand(direction) {
+  const commands = state.artifact?.indices?.commands || [];
+  const ordered = direction > 0 ? commands : [...commands].reverse();
+  const next = ordered.find((index) => direction > 0
+    ? index > state.currentIndex
+    : index < state.currentIndex);
+  setCurrentIndex(next ?? (direction > 0 ? state.events.length - 1 : 0));
 }
 
 function stopPlayback() {
@@ -391,6 +462,22 @@ window.addEventListener("message", (event) => {
 });
 
 els.playButton.addEventListener("click", togglePlayback);
+els.previousCommandButton.addEventListener("click", () => {
+  stopPlayback();
+  stepCommand(-1);
+});
+els.previousStitchButton.addEventListener("click", () => {
+  stopPlayback();
+  setCurrentIndex(state.currentIndex - 1);
+});
+els.nextStitchButton.addEventListener("click", () => {
+  stopPlayback();
+  setCurrentIndex(state.currentIndex + 1);
+});
+els.nextCommandButton.addEventListener("click", () => {
+  stopPlayback();
+  stepCommand(1);
+});
 els.speedDownButton.addEventListener("click", () => setSpeed(state.speed - 5));
 els.speedUpButton.addEventListener("click", () => setSpeed(state.speed + 5));
 els.resetViewButton.addEventListener("click", () => {
@@ -401,14 +488,55 @@ els.resetViewButton.addEventListener("click", () => {
 });
 els.showJumps.addEventListener("change", draw);
 els.showTrims.addEventListener("change", draw);
-els.timeline.addEventListener("input", () => setCurrentIndex(Number(els.timeline.value)));
+els.timeline.addEventListener("input", () => {
+  stopPlayback();
+  setCurrentIndex(Number(els.timeline.value));
+});
 
 els.stage.addEventListener("wheel", (event) => {
   if (!state.artifact) return;
   event.preventDefault();
+  const bounds = state.artifact.bounds;
+  const before = canvasTransform(bounds);
+  const rect = els.canvas.getBoundingClientRect();
+  const pointerX = event.clientX - rect.left;
+  const pointerY = event.clientY - rect.top;
+  const designX = bounds.min_x + (pointerX - before.offsetX) / before.scale;
+  const designY = bounds.min_y + (pointerY - before.offsetY) / before.scale;
   const factor = event.deltaY < 0 ? 1.1 : 0.9;
   state.zoom = Math.max(0.2, Math.min(12, state.zoom * factor));
+  const after = canvasTransform(bounds);
+  state.panX += pointerX - (after.offsetX + (designX - bounds.min_x) * after.scale);
+  state.panY += pointerY - (after.offsetY + (designY - bounds.min_y) * after.scale);
   draw();
+});
+
+window.addEventListener("keydown", (event) => {
+  if (!state.events.length || event.target.closest?.("input, button, select, textarea")) return;
+  if (event.key === " ") {
+    event.preventDefault();
+    togglePlayback();
+  } else if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    stopPlayback();
+    setCurrentIndex(state.currentIndex - 1);
+  } else if (event.key === "ArrowRight") {
+    event.preventDefault();
+    stopPlayback();
+    setCurrentIndex(state.currentIndex + 1);
+  } else if (event.key === "PageUp") {
+    event.preventDefault();
+    stopPlayback();
+    stepCommand(-1);
+  } else if (event.key === "PageDown") {
+    event.preventDefault();
+    stopPlayback();
+    stepCommand(1);
+  } else if (event.key.toLowerCase() === "r") {
+    event.preventDefault();
+    stopPlayback();
+    setCurrentIndex(0);
+  }
 });
 
 els.stage.addEventListener("mousedown", (event) => {
