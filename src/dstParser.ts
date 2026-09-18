@@ -74,8 +74,8 @@ function classifyRecord(b0: number, b1: number, b2: number): DstCommandKind {
   if (b0 === 0 && b1 === 0 && b2 === 0xf3) return "end";
 
   const commandBits = b2 & 0xc3;
-  // DST has no trim opcode. 0xC3 is color change; trim is encoded as
-  // a small, zero-net sequence of three jump records.
+  // DST has no trim opcode. Preserve jump records without interpreting
+  // machine-specific trim conventions. 0xC3 is color change.
   if (commandBits === 0xc3) return "color_change";
   if (commandBits === 0x83) return "jump";
   if (commandBits === 0x43) return "other"; // sequin-mode related
@@ -105,97 +105,16 @@ function rawRecords(buffer: Uint8Array): RawRecord[] {
   return records;
 }
 
-function isTajimaTrimSequence(run: RawRecord[], index: number): boolean {
-  if (index + 2 >= run.length) return false;
-  const records = run.slice(index, index + 3);
-  const first = records[0];
-  const third = records[2];
-  const returnsToOrigin = third.x === first.fromX && third.y === first.fromY;
-  const hasMotion = records.some((event) => event.x !== event.fromX || event.y !== event.fromY);
-  const smallMotion = records.every(
-    (event) => Math.abs(event.x - event.fromX) <= 4 && Math.abs(event.y - event.fromY) <= 4
-  );
-  return returnsToOrigin && hasMotion && smallMotion;
-}
-
-function logicalJump(records: RawRecord[]): SemanticEvent {
-  const first = records[0];
-  const last = records[records.length - 1];
-  return {
-    ...last,
-    fromX: first.fromX,
-    fromY: first.fromY,
-    kind: "jump",
-    sourceRecordIndex: first.sourceRecordIndex,
-    sourceRecordCount: records.length,
-    decodedFrom: null
-  };
-}
-
-function decodeJumpRun(run: RawRecord[]): SemanticEvent[] {
-  const decoded: SemanticEvent[] = [];
-  let movementStart = 0;
-  let index = 0;
-
-  while (index < run.length) {
-    if (!isTajimaTrimSequence(run, index)) {
-      index += 1;
-      continue;
-    }
-    if (movementStart < index) decoded.push(logicalJump(run.slice(movementStart, index)));
-    const first = run[index];
-    const last = run[index + 2];
-    decoded.push({
-      ...last,
-      fromX: first.fromX,
-      fromY: first.fromY,
-      kind: "trim",
-      sourceRecordIndex: first.sourceRecordIndex,
-      sourceRecordCount: 3,
-      decodedFrom: "tajima_three_jump_trim_sequence"
-    });
-    index += 3;
-    movementStart = index;
-  }
-  if (movementStart < run.length) decoded.push(logicalJump(run.slice(movementStart)));
-  return decoded;
-}
-
-function semanticEvents(records: RawRecord[]): SemanticEvent[] {
-  const events: SemanticEvent[] = [];
-  let index = 0;
-  while (index < records.length) {
-    if (records[index].kind !== "jump") {
-      events.push({ ...records[index], sourceRecordCount: 1, decodedFrom: null });
-      index += 1;
-      continue;
-    }
-    let runEnd = index;
-    while (runEnd < records.length && records[runEnd].kind === "jump") runEnd += 1;
-    events.push(...decodeJumpRun(records.slice(index, runEnd)));
-    index = runEnd;
-  }
-  return events;
-}
-
 function eventIndices(kinds: DstCommandKind[]): DstViewerArtifact["indices"] {
   const indices: DstViewerArtifact["indices"] = {
     commands: [], jumps: [], trims: [], stops: [], color_changes: [], thread_breaks: []
   };
-  let needleConnected = false;
   kinds.forEach((kind, index) => {
     if (kind !== "stitch") indices.commands.push(index);
     if (kind === "jump") indices.jumps.push(index);
     if (kind === "trim") indices.trims.push(index);
     if (kind === "stop") indices.stops.push(index);
     if (kind === "color_change") indices.color_changes.push(index);
-
-    if (kind === "stitch") {
-      if (!needleConnected) indices.thread_breaks.push(index);
-      needleConnected = true;
-    } else {
-      needleConnected = false;
-    }
   });
   return indices;
 }
@@ -228,10 +147,16 @@ export function parseDst(buffer: Uint8Array, _sourceName = "design.dst"): DstVie
 
   const raw = rawRecords(buffer);
   if (raw.length === 0) throw new DstParseError("DST file does not contain stitch records.");
-  const events = semanticEvents(raw);
+  const events: SemanticEvent[] = raw.map((event) => ({ ...event, sourceRecordCount: 1, decodedFrom: null }));
   const kinds = events.map((event) => event.kind);
-  const stitched = events.filter((event) => event.kind === "stitch");
-  const bounded = stitched.length > 0 ? stitched : events;
+  // Include every encoded movement without spreading large designs into
+  // function arguments (which exceeds the JavaScript argument limit).
+  const bounds = events.reduce((bounds, event) => ({
+    min_x: Math.min(bounds.min_x, event.fromX, event.x),
+    min_y: Math.min(bounds.min_y, event.fromY, event.y),
+    max_x: Math.max(bounds.max_x, event.fromX, event.x),
+    max_y: Math.max(bounds.max_y, event.fromY, event.y)
+  }), { min_x: 0, min_y: 0, max_x: 0, max_y: 0 });
   const blocks = threadBlocks(kinds);
   const count = (kind: DstCommandKind): number => kinds.filter((item) => item === kind).length;
 
@@ -239,12 +164,7 @@ export function parseDst(buffer: Uint8Array, _sourceName = "design.dst"): DstVie
     version: 2,
     format: "dst_viewer_artifact",
     units: "dst_0.1mm",
-    bounds: {
-      min_x: Math.min(...bounded.map((event) => event.x)),
-      min_y: Math.min(...bounded.map((event) => event.y)),
-      max_x: Math.max(...bounded.map((event) => event.x)),
-      max_y: Math.max(...bounded.map((event) => event.y))
-    },
+    bounds,
     summary: {
       event_count: events.length,
       stitch_count: count("stitch"),

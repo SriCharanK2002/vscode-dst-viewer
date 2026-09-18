@@ -61,7 +61,7 @@ export interface RenderSegment {
 export function buildSewnSegments(events: ViewerEvent[]): RenderSegment[] {
   const segments: RenderSegment[] = [];
   events.forEach((event, eventIndex) => {
-    if (event.kind !== "stitch" || event.threadBreakBefore) return;
+    if (event.kind !== "stitch") return;
     if (event.fromX === event.x && event.fromY === event.y) return;
     segments.push({
       fromX: event.fromX,

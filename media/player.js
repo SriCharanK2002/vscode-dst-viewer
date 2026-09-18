@@ -57,7 +57,6 @@ function normalizeEvents(artifact) {
   const blocks = artifact?.thread_blocks || [];
   const fromXs = artifact?.events?.from_x || [];
   const fromYs = artifact?.events?.from_y || [];
-  const threadBreaks = new Set(artifact?.indices?.thread_breaks || []);
   const count = Math.min(xs.length, ys.length, cmds.length);
 
   return Array.from({ length: count }, (_, index) => {
@@ -70,7 +69,7 @@ function normalizeEvents(artifact) {
       cmd: cmds[index],
       kind: commandName(cmds[index]),
       block: block?.block_index || 0,
-      threadBreakBefore: threadBreaks.has(index)
+      threadBreakBefore: false
     };
   });
 }
@@ -79,7 +78,6 @@ function buildRenderPlan(events) {
   const plan = { sewn: [], jumps: [], markers: [] };
   events.forEach((event, eventIndex) => {
     if (event.kind === "stitch") {
-      if (event.threadBreakBefore) return;
       if (event.fromX === event.x && event.fromY === event.y) return;
       plan.sewn.push({
         from: { x: event.fromX, y: event.fromY },

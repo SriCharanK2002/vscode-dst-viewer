@@ -68,7 +68,7 @@ test("classifies 0xC3 as color change and 0x43 as sequin-related", () => {
   assert.equal(artifact.events.cmd[1], artifact.command_codes.other);
 });
 
-test("decodes a zero-net three-jump trim sequence", () => {
+test("preserves a zero-net three-jump sequence as three jump records", () => {
   const plusTwoJump = record(0x02, 0x01, 0x83);
   const minusFourJump = record(0x02, 0x02, 0x83);
   const bytes = new Uint8Array([
@@ -82,15 +82,15 @@ test("decodes a zero-net three-jump trim sequence", () => {
   const artifact = parseDst(bytes, "trim.dst");
 
   assert.equal(artifact.version, 2);
-  assert.deepEqual(artifact.indices.trims, [0]);
-  assert.deepEqual(artifact.indices.jumps, []);
+  assert.deepEqual(artifact.indices.trims, []);
+  assert.deepEqual(artifact.indices.jumps, [0, 1, 2]);
   assert.equal(artifact.summary.raw_jump_record_count, 3);
-  assert.equal(artifact.summary.decoded_trim_record_count, 3);
-  assert.equal(artifact.events.source_record_count[0], 3);
-  assert.equal(artifact.events.decoded_from[0], "tajima_three_jump_trim_sequence");
+  assert.equal(artifact.summary.decoded_trim_record_count, 0);
+  assert.equal(artifact.events.source_record_count[0], 1);
+  assert.equal(artifact.events.decoded_from[0], null);
 });
 
-test("collapses split jump records and marks the next penetration as a thread break", () => {
+test("preserves split jump records and the next stitch", () => {
   const bytes = new Uint8Array([
     ...header(),
     ...record(0, 0, 0x87),
@@ -101,13 +101,13 @@ test("collapses split jump records and marks the next penetration as a thread br
 
   const artifact = parseDst(bytes, "split-jump.dst");
 
-  assert.equal(artifact.summary.jump_count, 1);
+  assert.equal(artifact.summary.jump_count, 2);
   assert.equal(artifact.summary.raw_jump_record_count, 2);
-  assert.equal(artifact.events.source_record_count[0], 2);
-  assert.deepEqual(artifact.indices.thread_breaks, [1]);
+  assert.equal(artifact.events.source_record_count[0], 1);
+  assert.deepEqual(artifact.indices.thread_breaks, []);
 });
 
-test("uses stitch positions rather than transport excursions for bounds", () => {
+test("includes all encoded movement origins and destinations in bounds", () => {
   const bytes = new Uint8Array([
     ...header(),
     ...record(0, 0, 0x87),
@@ -117,5 +117,20 @@ test("uses stitch positions rather than transport excursions for bounds", () => 
 
   const artifact = parseDst(bytes, "bounds.dst");
 
-  assert.deepEqual(artifact.bounds, { min_x: 82, min_y: 0, max_x: 82, max_y: 0 });
+  assert.deepEqual(artifact.bounds, { min_x: 0, min_y: 0, max_x: 82, max_y: 0 });
+});
+
+
+test("handles large DST bounds without exceeding the function argument limit", () => {
+  const recordCount = 100_000;
+  const bytes = new Uint8Array(512 + (recordCount + 1) * 3);
+  bytes.set(header());
+  for (let i = 0; i < recordCount; i += 1) {
+    bytes.set(record(0x01, 0, 0x03), 512 + i * 3);
+  }
+  bytes.set(record(0, 0, 0xf3), 512 + recordCount * 3);
+  const artifact = parseDst(bytes);
+  assert.equal(artifact.summary.stitch_count, recordCount);
+  assert.equal(artifact.summary.event_count, recordCount + 1);
+  assert.deepEqual(artifact.bounds, { min_x: 0, min_y: 0, max_x: recordCount, max_y: 0 });
 });

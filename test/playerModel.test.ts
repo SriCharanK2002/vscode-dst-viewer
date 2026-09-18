@@ -30,7 +30,7 @@ test("builds normalized jump and trim timeline markers", () => {
   ]);
 });
 
-test("does not sew a connector into the first penetration after a thread break", () => {
+test("preserves every encoded stitch movement despite legacy thread-break flags", () => {
   const segments = buildSewnSegments([
     { x: 100, y: 0, fromX: 0, fromY: 0, kind: "stitch", block: 0, threadBreakBefore: true },
     { x: 110, y: 0, fromX: 100, fromY: 0, kind: "stitch", block: 0, threadBreakBefore: false },
@@ -38,6 +38,7 @@ test("does not sew a connector into the first penetration after a thread break",
   ]);
 
   assert.deepEqual(segments, [
+    { fromX: 0, fromY: 0, toX: 100, toY: 0, eventIndex: 0, block: 0 },
     { fromX: 100, fromY: 0, toX: 110, toY: 0, eventIndex: 1, block: 0 }
   ]);
 });
