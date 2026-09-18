@@ -109,7 +109,14 @@ function eventIndices(kinds: DstCommandKind[]): DstViewerArtifact["indices"] {
   const indices: DstViewerArtifact["indices"] = {
     commands: [], jumps: [], trims: [], stops: [], color_changes: [], thread_breaks: []
   };
+  let consecutiveJumps = 0;
   kinds.forEach((kind, index) => {
+    // Annotate each consecutive triple; never replace the underlying records.
+    consecutiveJumps = kind === "jump" ? consecutiveJumps + 1 : 0;
+    if (consecutiveJumps === 3) {
+      indices.trims.push(index);
+      consecutiveJumps = 0;
+    }
     if (kind !== "stitch") indices.commands.push(index);
     if (kind === "jump") indices.jumps.push(index);
     if (kind === "trim") indices.trims.push(index);
@@ -157,6 +164,7 @@ export function parseDst(buffer: Uint8Array, _sourceName = "design.dst"): DstVie
     max_x: Math.max(bounds.max_x, event.fromX, event.x),
     max_y: Math.max(bounds.max_y, event.fromY, event.y)
   }), { min_x: 0, min_y: 0, max_x: 0, max_y: 0 });
+  const indices = eventIndices(kinds);
   const blocks = threadBlocks(kinds);
   const count = (kind: DstCommandKind): number => kinds.filter((item) => item === kind).length;
 
@@ -169,7 +177,7 @@ export function parseDst(buffer: Uint8Array, _sourceName = "design.dst"): DstVie
       event_count: events.length,
       stitch_count: count("stitch"),
       jump_count: count("jump"),
-      trim_count: count("trim"),
+      trim_count: indices.trims.length,
       stop_count: count("stop"),
       color_change_count: count("color_change"),
       end_count: count("end"),
@@ -193,6 +201,6 @@ export function parseDst(buffer: Uint8Array, _sourceName = "design.dst"): DstVie
       source_record_count: events.map((event) => event.sourceRecordCount),
       decoded_from: events.map((event) => event.decodedFrom)
     },
-    indices: eventIndices(kinds)
+    indices
   };
 }

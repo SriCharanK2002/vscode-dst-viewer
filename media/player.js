@@ -57,6 +57,7 @@ function normalizeEvents(artifact) {
   const blocks = artifact?.thread_blocks || [];
   const fromXs = artifact?.events?.from_x || [];
   const fromYs = artifact?.events?.from_y || [];
+  const trimMarkers = new Set(artifact?.indices?.trims || []);
   const count = Math.min(xs.length, ys.length, cmds.length);
 
   return Array.from({ length: count }, (_, index) => {
@@ -69,7 +70,10 @@ function normalizeEvents(artifact) {
       cmd: cmds[index],
       kind: commandName(cmds[index]),
       block: block?.block_index || 0,
-      threadBreakBefore: false
+      threadBreakBefore: false,
+      trimMarker: trimMarkers.has(index),
+      trimX: fromXs[index - 2] ?? (index >= 3 ? xs[index - 3] : 0),
+      trimY: fromYs[index - 2] ?? (index >= 3 ? ys[index - 3] : 0)
     };
   });
 }
@@ -91,6 +95,12 @@ function buildRenderPlan(events) {
       plan.jumps.push({
         from: { x: event.fromX, y: event.fromY },
         to: event,
+        eventIndex
+      });
+    }
+    if (event.trimMarker && event.kind === "jump") {
+      plan.markers.push({
+        event: { ...event, kind: "trim", x: event.trimX, y: event.trimY },
         eventIndex
       });
     }

@@ -68,7 +68,7 @@ test("classifies 0xC3 as color change and 0x43 as sequin-related", () => {
   assert.equal(artifact.events.cmd[1], artifact.command_codes.other);
 });
 
-test("preserves a zero-net three-jump sequence as three jump records", () => {
+test("annotates three jumps as a trim while preserving their raw records", () => {
   const plusTwoJump = record(0x02, 0x01, 0x83);
   const minusFourJump = record(0x02, 0x02, 0x83);
   const bytes = new Uint8Array([
@@ -82,7 +82,9 @@ test("preserves a zero-net three-jump sequence as three jump records", () => {
   const artifact = parseDst(bytes, "trim.dst");
 
   assert.equal(artifact.version, 2);
-  assert.deepEqual(artifact.indices.trims, []);
+  assert.deepEqual(artifact.indices.trims, [2]);
+  assert.equal(artifact.summary.trim_count, 1);
+  assert.deepEqual(artifact.events.cmd, [1, 1, 1, 5]);
   assert.deepEqual(artifact.indices.jumps, [0, 1, 2]);
   assert.equal(artifact.summary.raw_jump_record_count, 3);
   assert.equal(artifact.summary.decoded_trim_record_count, 0);
@@ -133,4 +135,24 @@ test("handles large DST bounds without exceeding the function argument limit", (
   assert.equal(artifact.summary.stitch_count, recordCount);
   assert.equal(artifact.summary.event_count, recordCount + 1);
   assert.deepEqual(artifact.bounds, { min_x: 0, min_y: 0, max_x: recordCount, max_y: 0 });
+});
+
+
+test("marks nonzero long jump triples and resets the rule at stitches", () => {
+  const bytes = new Uint8Array([
+    ...header(),
+    ...record(0, 0, 0x87), ...record(0, 0, 0x87), ...record(0, 0, 0x87),
+    ...record(0, 0, 0x87), ...record(0, 0, 0x87), ...record(0, 0, 0x87),
+    ...record(1, 0, 0x03),
+    ...record(0, 0, 0x87), ...record(0, 0, 0x87),
+    ...record(1, 0, 0x03), ...record(0, 0, 0x87),
+    ...record(0, 0, 0xf3)
+  ]);
+  const artifact = parseDst(bytes);
+  assert.deepEqual(artifact.indices.trims, [2, 5]);
+  assert.equal(artifact.summary.trim_count, 2);
+  assert.equal(artifact.summary.jump_count, 9);
+  assert.equal(artifact.summary.stitch_count, 2);
+  assert.equal(artifact.events.x[2], 243);
+  assert.deepEqual(artifact.events.source_record_count, Array(12).fill(1));
 });
